@@ -4,14 +4,62 @@
 ## Chunk 1: Setup + Simulation
 ## ============================
 
-## install.packages("brms")
-# install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages", getOption("repos")))
+## ============================
+## FIX: Configure Rtools PATH for Windows
+## ============================
+
+# if (.Platform$OS.type == "windows") {
+#   
+#   # Add Rtools to PATH
+#   rtools_path <- "c:/rtools44/usr/bin;c:/rtools44/mingw64/bin"
+#   current_path <- Sys.getenv("PATH")
+#   
+#   if (!grepl("rtools44", current_path, ignore.case = TRUE)) {
+#     Sys.setenv(PATH = paste(rtools_path, current_path, sep = ";"))
+#     cat("✓ Rtools added to PATH\n")
+#   }
+#   
+#   # Verify make is accessible
+#   make_check <- tryCatch(
+#     system("make --version", intern = TRUE, ignore.stderr = TRUE),
+#     error = function(e) NULL
+#   )
+#   
+#   if (is.null(make_check)) {
+#     stop("ERROR: 'make' still not found. Please restart R after PATH configuration.")
+#   } else {
+#     cat("✓ make found:", make_check[1], "\n")
+#   }
+#   
+#   # Verify g++ is accessible
+#   gcc_check <- tryCatch(
+#     system("g++ --version", intern = TRUE, ignore.stderr = TRUE),
+#     error = function(e) NULL
+#   )
+#   
+#   if (is.null(gcc_check)) {
+#     stop("ERROR: 'g++' still not found. Please restart R after PATH configuration.")
+#   } else {
+#     cat("✓ g++ found:", gcc_check[1], "\n")
+#   }
+# }
+
+# ## Continue with rest of script...
+# rm(list = ls())  # Clear environment (but PATH persists in session)
 # 
-# library(cmdstanr)
+# system("make --version")
 # 
-# # Install CmdStan (one-time, ~5 minutes)
-# install_cmdstan()
-# cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+# # Should print g++ version (not error)
+# system("g++ --version")
+# 
+# # Test Stan compilation
+# library(rstan)
+# stancode <- 'data {int<lower=0> N;} parameters {real y;} model {y ~ normal(0,1);}'
+# mod <- stan_model(model_code = stancode)  # Should compile without error
+
+
+
+
 rm(list = ls())
 
 ## ---- Packages ----
@@ -19,7 +67,7 @@ needed_pkgs <- c(
   "tidyverse", "data.table",
   "lme4", "mgcv",
   "brms", "rstan",
-  "patchwork","cmdstanr"
+  "patchwork"
 )
 
 installed <- rownames(installed.packages())
@@ -360,162 +408,170 @@ if (length(ranef_gamm) == n_subjects) {
 ## Chunk 6: Bayesian GLMM (brms)
 ## ============================
 
-cat("\n========== Fitting Bayesian GLMM ==========\n")
+# cat("\n========== Fitting Bayesian GLMM ==========\n")
 
 ## Bayesian logistic regression with random intercept
 ## This will take several minutes to sample
-brms_glmm_fit <- brm(
-  y ~ x1 + x2 + time + (1 | id),
-  data = dat,
-  family = bernoulli(link = "logit"),
-  chains = 4,
-  iter = 2000,
-  warmup = 1000,
-  cores = 4,
-  backend = "cmdstanr",  
-  refresh = 0
-)
+# brms_glmm_fit <- brm(
+#   y ~ x1 + x2 + time + (1 | id),
+#   data   = dat,
+#   family = bernoulli(link = "logit"),
+#   prior  = c(
+#     prior(normal(0, 2), class = "Intercept"),
+#     prior(normal(0, 1), class = "b"),
+#     prior(cauchy(0, 1), class = "sd")
+#   ),
+#   chains = 4,
+#   iter   = 2000,
+#   warmup = 1000,
+#   cores  = 4,
+#   seed   = 501,
+#   control = list(adapt_delta = 0.95, max_treedepth = 15),
+#   silent = 2,
+#   refresh = 0,
+#   moment_match = TRUE
+# )
 
-summary(brms_glmm_fit)
+# summary(brms_glmm_fit)
 
 ## Diagnostics
-brms_glmm_loo <- loo(brms_glmm_fit)
-brms_glmm_waic <- waic(brms_glmm_fit)
+# brms_glmm_loo <- loo(brms_glmm_fit)
+# brms_glmm_waic <- waic(brms_glmm_fit)
 
-cat("Bayesian GLMM LOO:", brms_glmm_loo$estimates["looic", "Estimate"], "\n")
-cat("Bayesian GLMM WAIC:", brms_glmm_waic$estimates["waic", "Estimate"], "\n")
+# cat("Bayesian GLMM LOO:", brms_glmm_loo$estimates["looic", "Estimate"], "\n")
+# cat("Bayesian GLMM WAIC:", brms_glmm_waic$estimates["waic", "Estimate"], "\n")
 
 ## Predicted probabilities (posterior mean)
-dat$pred_brms_glmm <- predict(brms_glmm_fit, type = "response")[, "Estimate"]
-dat$eta_brms_glmm  <- predict(brms_glmm_fit, type = "response", scale = "linear")[, "Estimate"]
+# dat$pred_brms_glmm <- predict(brms_glmm_fit, type = "response")[, "Estimate"]
+# dat$eta_brms_glmm  <- predict(brms_glmm_fit, type = "response", scale = "linear")[, "Estimate"]
 
-brms_glmm_eta_rmse <- sqrt(mean((dat$eta_brms_glmm - dat$eta_true)^2))
-cat("Bayesian GLMM eta RMSE:", brms_glmm_eta_rmse, "\n")
+# brms_glmm_eta_rmse <- sqrt(mean((dat$eta_brms_glmm - dat$eta_true)^2))
+# cat("Bayesian GLMM eta RMSE:", brms_glmm_eta_rmse, "\n")
 
-p_brms_glmm <- ggplot(dat, aes(x = plogis(eta_true), y = pred_brms_glmm)) +
-  geom_point(alpha = 0.3) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    title = "Bayesian GLMM: Predicted vs True Probability",
-    x = "True Probability",
-    y = "Bayesian GLMM Predicted Probability"
-  ) +
-  theme_minimal()
+# p_brms_glmm <- ggplot(dat, aes(x = plogis(eta_true), y = pred_brms_glmm)) +
+#   geom_point(alpha = 0.3) +
+#   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+#   labs(
+#     title = "Bayesian GLMM: Predicted vs True Probability",
+#     x = "True Probability",
+#     y = "Bayesian GLMM Predicted Probability"
+#   ) +
+#   theme_minimal()
 
-print(p_brms_glmm)
+# print(p_brms_glmm)
 
 ## Extract random intercepts
-ranef_brms_glmm <- ranef(brms_glmm_fit)$id[, "Estimate", "Intercept"]
+# ranef_brms_glmm <- ranef(brms_glmm_fit)$id[, "Estimate", "Intercept"]
 
-re_comparison_brms_glmm <- data.frame(
-  id       = 1:n_subjects,
-  b_true   = b_true_subject,
-  b_fitted = ranef_brms_glmm
-)
+# re_comparison_brms_glmm <- data.frame(
+#   id       = 1:n_subjects,
+#   b_true   = b_true_subject,
+#   b_fitted = ranef_brms_glmm
+# )
 
-re_rmse_brms_glmm <- sqrt(mean((re_comparison_brms_glmm$b_fitted - re_comparison_brms_glmm$b_true)^2))
-cat("Bayesian GLMM random intercept RMSE:", re_rmse_brms_glmm, "\n")
+# re_rmse_brms_glmm <- sqrt(mean((re_comparison_brms_glmm$b_fitted - re_comparison_brms_glmm$b_true)^2))
+# cat("Bayesian GLMM random intercept RMSE:", re_rmse_brms_glmm, "\n")
 
-p_re_brms_glmm <- ggplot(re_comparison_brms_glmm, aes(x = b_true, y = b_fitted)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
-  labs(
-    title = "Bayesian GLMM: Fitted vs True Random Intercepts",
-    x = "True Random Intercept",
-    y = "Bayesian Fitted Random Intercept"
-  ) +
-  theme_minimal()
+# p_re_brms_glmm <- ggplot(re_comparison_brms_glmm, aes(x = b_true, y = b_fitted)) +
+#   geom_point(alpha = 0.6) +
+#   geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+#   labs(
+#     title = "Bayesian GLMM: Fitted vs True Random Intercepts",
+#     x = "True Random Intercept",
+#     y = "Bayesian Fitted Random Intercept"
+#   ) +
+#   theme_minimal()
 
-print(p_re_brms_glmm)
+# print(p_re_brms_glmm)
 
 ## Trace plots for convergence diagnostics
-plot(brms_glmm_fit, ask = FALSE)
+# plot(brms_glmm_fit, ask = FALSE)
 
 ## ============================
 ## Chunk 7: Bayesian GAM (brms with smooth)
 ## ============================
 
-cat("\n========== Fitting Bayesian GAM ==========\n")
+# cat("\n========== Fitting Bayesian GAM ==========\n")
 
 ## Bayesian logistic regression with smooth time effect and random intercept
 ## This is the most computationally intensive model
-brms_gam_fit <- brm(
-  y ~ x1 + x2 + s(time, bs = "cr", k = 8) + (1 | id),
-  data   = dat,
-  family = bernoulli(link = "logit"),
-  prior  = c(
-    prior(normal(0, 2), class = "Intercept"),
-    prior(normal(0, 1), class = "b"),
-    prior(cauchy(0, 1), class = "sd"),
-    prior(cauchy(0, 1), class = "sds")
-  ),
-  chains = 4,
-  iter   = 2000,
-  warmup = 1000,
-  cores  = 4,
-  seed   = 501,
-  control = list(adapt_delta = 0.95, max_treedepth = 12),
-  silent = 2,
-  refresh = 0
-)
+# brms_gam_fit <- brm(
+#   y ~ x1 + x2 + s(time, bs = "cr", k = 8) + (1 | id),
+#   data   = dat,
+#   family = bernoulli(link = "logit"),
+#   prior  = c(
+#     prior(normal(0, 2), class = "Intercept"),
+#     prior(normal(0, 1), class = "b"),
+#     prior(cauchy(0, 1), class = "sd"),
+#     prior(cauchy(0, 1), class = "sds")
+#   ),
+#   chains = 4,
+#   iter   = 2000,
+#   warmup = 1000,
+#   cores  = 4,
+#   seed   = 501,
+#   control = list(adapt_delta = 0.95, max_treedepth = 12),
+#   silent = 2,
+#   refresh = 0
+# )
 
-summary(brms_gam_fit)
+# summary(brms_gam_fit)
 
 ## Diagnostics
-brms_gam_loo <- loo(brms_gam_fit)
-brms_gam_waic <- waic(brms_gam_fit)
+# brms_gam_loo <- loo(brms_gam_fit)
+# brms_gam_waic <- waic(brms_gam_fit)
 
-cat("Bayesian GAM LOO:", brms_gam_loo$estimates["looic", "Estimate"], "\n")
-cat("Bayesian GAM WAIC:", brms_gam_waic$estimates["waic", "Estimate"], "\n")
+# cat("Bayesian GAM LOO:", brms_gam_loo$estimates["looic", "Estimate"], "\n")
+# cat("Bayesian GAM WAIC:", brms_gam_waic$estimates["waic", "Estimate"], "\n")
 
 ## Predicted probabilities
-dat$pred_brms_gam <- predict(brms_gam_fit, type = "response")[, "Estimate"]
-dat$eta_brms_gam  <- predict(brms_gam_fit, type = "response", scale = "linear")[, "Estimate"]
+# dat$pred_brms_gam <- predict(brms_gam_fit, type = "response")[, "Estimate"]
+# dat$eta_brms_gam  <- predict(brms_gam_fit, type = "response", scale = "linear")[, "Estimate"]
 
-brms_gam_eta_rmse <- sqrt(mean((dat$eta_brms_gam - dat$eta_true)^2))
-cat("Bayesian GAM eta RMSE:", brms_gam_eta_rmse, "\n")
+# brms_gam_eta_rmse <- sqrt(mean((dat$eta_brms_gam - dat$eta_true)^2))
+# cat("Bayesian GAM eta RMSE:", brms_gam_eta_rmse, "\n")
 
-p_brms_gam <- ggplot(dat, aes(x = plogis(eta_true), y = pred_brms_gam)) +
-  geom_point(alpha = 0.3) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    title = "Bayesian GAM: Predicted vs True Probability",
-    x = "True Probability",
-    y = "Bayesian GAM Predicted Probability"
-  ) +
-  theme_minimal()
+# p_brms_gam <- ggplot(dat, aes(x = plogis(eta_true), y = pred_brms_gam)) +
+#   geom_point(alpha = 0.3) +
+#   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+#   labs(
+#     title = "Bayesian GAM: Predicted vs True Probability",
+#     x = "True Probability",
+#     y = "Bayesian GAM Predicted Probability"
+#   ) +
+#   theme_minimal()
 
-print(p_brms_gam)
+# print(p_brms_gam)
 
 ## Extract random intercepts
-ranef_brms_gam <- ranef(brms_gam_fit)$id[, "Estimate", "Intercept"]
+# ranef_brms_gam <- ranef(brms_gam_fit)$id[, "Estimate", "Intercept"]
 
-re_comparison_brms_gam <- data.frame(
-  id       = 1:n_subjects,
-  b_true   = b_true_subject,
-  b_fitted = ranef_brms_gam
-)
+# re_comparison_brms_gam <- data.frame(
+#   id       = 1:n_subjects,
+#   b_true   = b_true_subject,
+#   b_fitted = ranef_brms_gam
+# )
 
-re_rmse_brms_gam <- sqrt(mean((re_comparison_brms_gam$b_fitted - re_comparison_brms_gam$b_true)^2))
-cat("Bayesian GAM random intercept RMSE:", re_rmse_brms_gam, "\n")
+# re_rmse_brms_gam <- sqrt(mean((re_comparison_brms_gam$b_fitted - re_comparison_brms_gam$b_true)^2))
+# cat("Bayesian GAM random intercept RMSE:", re_rmse_brms_gam, "\n")
 
-p_re_brms_gam <- ggplot(re_comparison_brms_gam, aes(x = b_true, y = b_fitted)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
-  labs(
-    title = "Bayesian GAM: Fitted vs True Random Intercepts",
-    x = "True Random Intercept",
-    y = "Bayesian Fitted Random Intercept"
-  ) +
-  theme_minimal()
+# p_re_brms_gam <- ggplot(re_comparison_brms_gam, aes(x = b_true, y = b_fitted)) +
+#   geom_point(alpha = 0.6) +
+#   geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+#   labs(
+#     title = "Bayesian GAM: Fitted vs True Random Intercepts",
+#     x = "True Random Intercept",
+#     y = "Bayesian Fitted Random Intercept"
+#   ) +
+#   theme_minimal()
 
-print(p_re_brms_gam)
+# print(p_re_brms_gam)
 
 ## Trace plots
-plot(brms_gam_fit, ask = FALSE)
+# plot(brms_gam_fit, ask = FALSE)
 
 ## Conditional effects plot for smooth
-conditional_effects(brms_gam_fit, effects = "time")
+# conditional_effects(brms_gam_fit, effects = "time")
 
 ## ============================
 ## Chunk 8: Model Comparison
@@ -525,15 +581,15 @@ cat("\n========== Model Comparison Summary ==========\n")
 
 ## Compile all metrics into a comparison table
 comparison_table <- data.frame(
-  Model = c("GLM", "GLMM", "GAM", "GAMM", "Bayesian GLMM", "Bayesian GAM"),
+  Model = c("GLM", "GLMM", "GAM", "GAMM"),
   
   AIC_BIC = c(
     paste0("AIC=", round(glm_aic, 2), " | BIC=", round(glm_bic, 2)),
     paste0("AIC=", round(glmm_aic, 2), " | BIC=", round(glmm_bic, 2)),
     paste0("AIC=", round(gam_aic, 2), " | BIC=", round(gam_bic, 2)),
     paste0("AIC=", round(gamm_aic, 2), " | BIC=", round(gamm_bic, 2)),
-    paste0("LOO=", round(brms_glmm_loo$estimates["looic", "Estimate"], 2)),
-    paste0("LOO=", round(brms_gam_loo$estimates["looic", "Estimate"], 2))
+    NA,  # LOO not available (Bayesian models skipped)
+    NA
   ),
   
   Deviance = c(
@@ -550,8 +606,8 @@ comparison_table <- data.frame(
     round(glmm_eta_rmse, 4),
     round(gam_eta_rmse, 4),
     round(gamm_eta_rmse, 4),
-    round(brms_glmm_eta_rmse, 4),
-    round(brms_gam_eta_rmse, 4)
+    NA,  # Bayesian models skipped
+    NA
   ),
   
   RE_RMSE = c(
@@ -559,8 +615,8 @@ comparison_table <- data.frame(
     round(re_rmse, 4),
     NA,  # GAM has no random effects
     ifelse(exists("re_rmse_gamm"), round(re_rmse_gamm, 4), NA),
-    round(re_rmse_brms_glmm, 4),
-    round(re_rmse_brms_gam, 4)
+    NA,  # Bayesian models skipped
+    NA
   ),
   
   Handles_Correlation = c("No", "Yes", "No", "Yes", "Yes", "Yes"),
