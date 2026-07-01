@@ -4,7 +4,7 @@
 ## ============================
 
 ## This script integrates the OpenClustered benchmark datasets
-## with your original 6-model comparison framework
+## with the original 6-model comparison framework
 
 ## ============================
 ## PART 1: SETUP & PACKAGE LOADING
@@ -45,7 +45,7 @@ print(table(meta_data$cluster_type))
 ## PART 3: DATA ADAPTATION FUNCTION
 ## ============================
 
-# Function to adapt OpenClustered data to your model format
+# Function to adapt OpenClustered data to the model format
 adapt_openclustered_data <- function(raw_data, add_synthetic_time = TRUE) {
   """
   Adapts OpenClustered dataset to match expected format:
